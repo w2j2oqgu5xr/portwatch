@@ -58,6 +58,21 @@ func TestConsoleNotifier_PortClosed(t *testing.T) {
 	}
 }
 
+func TestConsoleNotifier_TimestampInOutput(t *testing.T) {
+	var buf bytes.Buffer
+	n := &alert.ConsoleNotifier{Out: &buf}
+
+	evt := baseEvent(false, true)
+	if err := n.Notify(alert.LevelAlert, evt); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "2024-01-15") {
+		t.Errorf("expected timestamp in output, got: %s", output)
+	}
+}
+
 func TestLevelForEvent_PortOpened(t *testing.T) {
 	evt := baseEvent(false, true)
 	if got := alert.LevelForEvent(evt); got != alert.LevelAlert {
