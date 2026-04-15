@@ -1,8 +1,8 @@
 package config_test
 
 import (
-	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -11,81 +11,78 @@ import (
 
 func writeTemp(t *testing.T, content string) string {
 	t.Helper()
-	f, err := os.CreateTemp("", "portwatch-cfg-*.json")
+	f, err := os.CreateTemp(t.TempDir(), "*.yaml")
 	if err != nil {
-		t.Fatalf("create temp file: %v", err)
+		t.Fatal(err)
 	}
 	if _, err := f.WriteString(content); err != nil {
-		t.Fatalf("write temp file: %v", err)
+		t.Fatal(err)
 	}
 	f.Close()
-	t.Cleanup(func() { os.Remove(f.Name()) })
 	return f.Name()
 }
 
 func TestLoad_ValidConfig(t *testing.T) {
-	path := writeTemp(t, `{"host":"127.0.0.1","ports":[80,443],"interval":"10s"}`)
+	path := writeTemp(t, "host: 127.0.0.1\nports: [80, 443]\ninterval: 10s\n")
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.Host != "127.0.0.1" {
-		t.Errorf("host: got %q, want %q", cfg.Host, "127.0.0.1")
+		t.Errorf("expected host 127.0.0.1, got %s", cfg.Host)
 	}
 	if len(cfg.Ports) != 2 {
-		t.Errorf("ports length: got %d, want 2", len(cfg.Ports))
+		t.Errorf("expected 2 ports, got %d", len(cfg.Ports))
 	}
-	if cfg.Interval.Duration != 10*time.Second {
-		t.Errorf("interval: got %v, want 10s", cfg.Interval.Duration)
+	if cfg.Interval != 10*time.Second {
+		t.Errorf("expected 10s interval, got %v", cfg.Interval)
 	}
 }
 
 func TestLoad_DefaultsApplied(t *testing.T) {
-	path := writeTemp(t, `{"ports":[8080]}`)
+	path := writeTemp(t, "ports: [22]\n")
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Host != "localhost" {
-		t.Errorf("default host: got %q, want %q", cfg.Host, "localhost")
+	if cfg.Host != config.DefaultHost {
+		t.Errorf("expected default host, got %s", cfg.Host)
 	}
-	if cfg.Interval.Duration != 5*time.Second {
-		t.Errorf("default interval: got %v, want 5s", cfg.Interval.Duration)
+	if cfg.Interval != config.DefaultInterval {
+		t.Errorf("expected default interval, got %v", cfg.Interval)
+	}
+	if cfg.SnapshotDB != config.DefaultSnapshotDB {
+		t.Errorf("expected default snapshot db, got %s", cfg.SnapshotDB)
 	}
 }
 
 func TestLoad_MissingFile(t *testing.T) {
-	_, err := config.Load("/nonexistent/portwatch.json")
+	_, err := config.Load(filepath.Join(t.TempDir(), "missing.yaml"))
 	if err == nil {
-		t.Fatal("expected error for missing file, got nil")
+		t.Error("expected error for missing file")
 	}
 }
 
 func TestValidate_NoPorts(t *testing.T) {
-	cfg := &config.Config{Host: "localhost"}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for empty ports, got nil")
+	path := writeTemp(t, "host: localhost\ninterval: 5s\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Error("expected validation error when no ports specified")
 	}
 }
 
 func TestValidate_InvalidPort(t *testing.T) {
-	cfg := &config.Config{Ports: []int{0}}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for port 0, got nil")
+	path := writeTemp(t, "ports: [0]\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Error("expected validation error for port 0")
 	}
 }
 
-func TestDuration_RoundTrip(t *testing.T) {
-	d := config.Duration{Duration: 30 * time.Second}
-	b, err := json.Marshal(d)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	var d2 config.Duration
-	if err := json.Unmarshal(b, &d2); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if d.Duration != d2.Duration {
-		t.Errorf("round-trip: got %v, want %v", d2.Duration, d.Duration)
+func TestValidate_IntervalTooShort(t *testing.T) {
+	path := writeTemp(t, "ports: [80]\ninterval: 500ms\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Error("expected validation error for interval < 1s")
 	}
 }

@@ -2,79 +2,74 @@
 package config
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
-// Config holds the top-level portwatch configuration.
+// Defaults applied when values are absent in the config file.
+const (
+	DefaultInterval   = 5 * time.Second
+	DefaultHost       = "localhost"
+	DefaultSnapshotDB = "portwatch.snapshot"
+)
+
+// Config holds the full portwatch runtime configuration.
 type Config struct {
-	// Host is the target host to scan (default: "localhost").
-	Host string `json:"host"`
-
-	// Ports lists the port numbers to monitor.
-	Ports []int `json:"ports"`
-
-	// Interval is how often to re-scan the ports.
-	Interval Duration `json:"interval"`
+	Host        string        `yaml:"host"`
+	Ports       []int         `yaml:"ports"`
+	AllowPorts  []int         `yaml:"allow_ports"`
+	DenyPorts   []int         `yaml:"deny_ports"`
+	Interval    time.Duration `yaml:"interval"`
+	SnapshotDB  string        `yaml:"snapshot_db"`
+	HistoryFile string        `yaml:"history_file"`
+	Verbose     bool          `yaml:"verbose"`
 }
 
-// Duration is a wrapper around time.Duration that supports JSON unmarshalling
-// from a human-readable string such as "5s" or "1m".
-type Duration struct{ time.Duration }
-
-func (d *Duration) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	parsed, err := time.ParseDuration(s)
-	if err != nil {
-		return fmt.Errorf("config: invalid duration %q: %w", s, err)
-	}
-	d.Duration = parsed
-	return nil
-}
-
-func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.Duration.String())
-}
-
-// Load reads and parses a JSON config file from the given path.
+// Load reads a YAML config file from path and applies defaults.
 func Load(path string) (*Config, error) {
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("config: open %q: %w", path, err)
+		return nil, fmt.Errorf("config: read %q: %w", path, err)
 	}
-	defer f.Close()
-
 	var cfg Config
-	if err := json.NewDecoder(f).Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("config: decode: %w", err)
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("config: parse %q: %w", path, err)
 	}
-
+	applyDefaults(&cfg)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
 }
 
-// Validate returns an error if the configuration contains invalid values.
-func (c *Config) Validate() error {
+func applyDefaults(c *Config) {
 	if c.Host == "" {
-		c.Host = "localhost"
+		c.Host = DefaultHost
 	}
-	if len(c.Ports) == 0 {
-		return fmt.Errorf("config: at least one port must be specified")
+	if c.Interval == 0 {
+		c.Interval = DefaultInterval
 	}
-	for _, p := range c.Ports {
+	if c.SnapshotDB == "" {
+		c.SnapshotDB = DefaultSnapshotDB
+	}
+}
+
+// Validate checks that the configuration is semantically valid.
+func (c *Config) Validate() error {
+	if len(c.Ports) == 0 && len(c.AllowPorts) == 0 {
+		return errors.New("config: at least one port must be specified in 'ports' or 'allow_ports'")
+	}
+	for _, p := range append(c.Ports, append(c.AllowPorts, c.DenyPorts...)...) {
 		if p < 1 || p > 65535 {
-			return fmt.Errorf("config: port %d is out of valid range (1-65535)", p)
+			return fmt.Errorf("config: invalid port %d", p)
 		}
 	}
-	if c.Interval.Duration <= 0 {
-		c.Interval.Duration = 5 * time.Second
+	if c.Interval < time.Second {
+		return fmt.Errorf("config: interval %v is too short (minimum 1s)", c.Interval)
 	}
 	return nil
 }
