@@ -66,3 +66,20 @@ func OpenPorts(states []PortState) []PortState {
 	}
 	return open
 }
+
+// PortRange generates a slice of port numbers from start to end, inclusive.
+// It returns an error if start or end are out of the valid port range [1, 65535]
+// or if start is greater than end.
+func PortRange(start, end int) ([]int, error) {
+	if start < 1 || end > 65535 {
+		return nil, fmt.Errorf("scanner: port range [%d, %d] out of valid bounds [1, 65535]", start, end)
+	}
+	if start > end {
+		return nil, fmt.Errorf("scanner: start port %d must not be greater than end port %d", start, end)
+	}
+	ports := make([]int, 0, end-start+1)
+	for p := start; p <= end; p++ {
+		ports = append(ports, p)
+	}
+	return ports, nil
+}
