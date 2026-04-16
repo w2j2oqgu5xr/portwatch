@@ -1,14 +1,5 @@
-// Package portname maps TCP port numbers to human-readable service names.
+// Package portname provides human-readable names for well-known TCP/UDP port numbers.
 //
-// It provides two functions:
-//
-//   - Lookup returns a formatted string combining the port number and service
-//     name, e.g. "443 (https)". For unknown ports only the number is returned.
-//
-//   - Name returns only the bare service name string, or "unknown" when the
-//     port is not in the built-in table.
-//
-// The built-in table covers the most common well-known ports. It is not
-// intended to be exhaustive; use the resolver package for configurable
-// overrides and extended lookups.
+// It exposes a small lookup table of common services and a helper that formats
+// a port number together with its service name for display purposes.
 package portname
