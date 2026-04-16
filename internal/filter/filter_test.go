@@ -63,6 +63,14 @@ func TestApply_FiltersSlice(t *testing.T) {
 	}
 }
 
+func TestApply_EmptyInput(t *testing.T) {
+	f := filter.New([]int{80}, nil)
+	got := f.Apply([]int{})
+	if len(got) != 0 {
+		t.Errorf("expected empty result, got %v", got)
+	}
+}
+
 func TestValidate_ValidPorts(t *testing.T) {
 	if err := filter.Validate([]int{1, 80, 443, 65535}); err != nil {
 		t.Errorf("unexpected error: %v", err)
