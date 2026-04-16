@@ -77,3 +77,16 @@ func ReadAll(path string) ([]Entry, error) {
 	}
 	return entries, nil
 }
+
+// Filter returns only the entries that satisfy the provided predicate.
+// It is a convenience helper for callers that need to search or narrow
+// down results returned by ReadAll without reimplementing the loop.
+func Filter(entries []Entry, fn func(Entry) bool) []Entry {
+	var out []Entry
+	for _, e := range entries {
+		if fn(e) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
