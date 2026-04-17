@@ -52,3 +52,22 @@ func TestNew_NilExtraDoesNotPanic(t *testing.T) {
 	r := resolver.New(nil)
 	_ = r.Name(80)
 }
+
+func TestName_WellKnownPorts(t *testing.T) {
+	r := resolver.New(nil)
+	cases := []struct {
+		port int
+		want string
+	}{
+		{21, "ftp"},
+		{25, "smtp"},
+		{53, "dns"},
+		{80, "http"},
+		{443, "https"},
+	}
+	for _, tc := range cases {
+		if got := r.Name(tc.port); got != tc.want {
+			t.Errorf("Name(%d): expected %s, got %s", tc.port, tc.want, got)
+		}
+	}
+}
