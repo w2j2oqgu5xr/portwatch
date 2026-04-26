@@ -67,6 +67,42 @@ func TestWatcher_DetectsOpenedPort(t *testing.T) {
 	}
 }
 
+func TestWatcher_DetectsClosedPort(t *testing.T) {
+	port, stop := startTCP(t)
+
+	cap := &captureNotifier{}
+	p := pipeline.New(cap)
+
+	cfg := portwatch.Config{
+		Host:     "127.0.0.1",
+		Ports:    portwatch.PortRange{From: port, To: port},
+		Interval: 5 * time.Second,
+	}
+	w, err := portwatch.New(cfg, p)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	// Stop the listener after a short delay so the watcher first sees it open,
+	// then closed within the timeout window.
+	time.AfterFunc(2*time.Second, stop)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 18*time.Second)
+	defer cancel()
+	w.Run(ctx) //nolint:errcheck
+
+	var kinds []string
+	for _, e := range cap.events {
+		kinds = append(kinds, string(e.Kind))
+	}
+	for _, e := range cap.events {
+		if e.Kind == portwatch.EventClosed {
+			return
+		}
+	}
+	t.Fatalf("expected a %q event, got kinds: %v", portwatch.EventClosed, kinds)
+}
+
 func TestNew_InvalidConfig(t *testing.T) {
 	_, err := portwatch.New(portwatch.Config{}, nil)
 	if err == nil {
